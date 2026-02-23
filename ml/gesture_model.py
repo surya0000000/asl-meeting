@@ -12,6 +12,14 @@ except ImportError:  # pragma: no cover - handled at runtime where torch is requ
     torch = None
     nn = None
 
+if nn is not None:
+    BaseTorchModule = nn.Module
+else:
+    class BaseTorchModule:  # pragma: no cover - import fallback only
+        """Fallback base type when torch is unavailable."""
+
+        pass
+
 
 @dataclass(slots=True)
 class ModelConfig:
@@ -34,7 +42,7 @@ def _require_torch() -> None:
         )
 
 
-class GestureLSTM(nn.Module):  # type: ignore[misc]
+class GestureLSTM(BaseTorchModule):  # type: ignore[misc]
     """LSTM classifier over landmark sequences."""
 
     def __init__(self, config: ModelConfig) -> None:
@@ -61,7 +69,7 @@ class GestureLSTM(nn.Module):  # type: ignore[misc]
         return self.head(final_hidden)
 
 
-class GestureTransformer(nn.Module):  # type: ignore[misc]
+class GestureTransformer(BaseTorchModule):  # type: ignore[misc]
     """Transformer encoder classifier for temporal landmark embeddings."""
 
     def __init__(self, config: ModelConfig) -> None:
@@ -93,7 +101,7 @@ class GestureTransformer(nn.Module):  # type: ignore[misc]
         return self.head(z[:, -1, :])
 
 
-def build_model(config: ModelConfig) -> nn.Module:  # type: ignore[valid-type]
+def build_model(config: ModelConfig) -> BaseTorchModule:
     """Factory for temporal model architectures."""
     _require_torch()
     if config.architecture == "transformer":
