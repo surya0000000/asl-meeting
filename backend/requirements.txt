@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+pydantic-settings
+numpy
+torch
+openai
+pyttsx3
+websockets
+httpx
+pytest
