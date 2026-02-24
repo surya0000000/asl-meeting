@@ -11,7 +11,6 @@ from typing import Any
 import numpy as np
 
 from ml.config import MLConfig
-from ml.models.model_factory import get_model
 from ml.sequence_buffer import SequenceBuffer
 
 try:
@@ -56,6 +55,8 @@ class GestureInferenceEngine:
 
     def _init_torch_model(self) -> None:
         assert torch is not None
+        from ml.models.model_factory import get_model
+
         checkpoint_path = Path(self.config.model_checkpoint_path)
         checkpoint = None
         if checkpoint_path.exists():
