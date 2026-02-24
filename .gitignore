@@ -26,7 +26,9 @@ tmp/
 temp/
 
 # ML artifacts
-ml/models/
+ml/models/*.pt
+ml/models/*.pth
+ml/models/*.onnx
 ml/checkpoints/
 backend/audio_output/
 *.wav

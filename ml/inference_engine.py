@@ -11,7 +11,7 @@ from typing import Any
 import numpy as np
 
 from ml.config import MLConfig
-from ml.gesture_model import ModelConfig, build_model
+from ml.models.model_factory import get_model
 from ml.sequence_buffer import SequenceBuffer
 
 try:
@@ -47,6 +47,7 @@ class GestureInferenceEngine:
         self._device = "cpu"
         self._model = None
         self._torch_enabled = torch is not None
+        self._architecture = self.config.model_architecture
 
         if self._torch_enabled:
             self._init_torch_model()
@@ -55,20 +56,24 @@ class GestureInferenceEngine:
 
     def _init_torch_model(self) -> None:
         assert torch is not None
-        model_config = ModelConfig(
-            input_size=self.config.input_size,
-            num_classes=len(self.vocabulary),
-        )
-        self._model = build_model(model_config)
-
         checkpoint_path = Path(self.config.model_checkpoint_path)
+        checkpoint = None
         if checkpoint_path.exists():
             checkpoint = torch.load(checkpoint_path, map_location="cpu")
-            model_state = checkpoint.get("model_state_dict", checkpoint)
-            self._model.load_state_dict(model_state)
             saved_vocab = checkpoint.get("vocabulary")
             if isinstance(saved_vocab, list) and saved_vocab:
                 self.vocabulary = [str(v) for v in saved_vocab]
+            self._architecture = str(checkpoint.get("architecture", self._architecture))
+
+        self._model = get_model(
+            architecture=self._architecture,
+            num_classes=len(self.vocabulary),
+            sequence_length=self.config.sequence_length,
+        )
+
+        if checkpoint is not None:
+            model_state = checkpoint.get("model_state_dict", checkpoint)
+            self._model.load_state_dict(model_state, strict=False)
             LOGGER.info("Loaded model checkpoint from %s", checkpoint_path)
         else:
             LOGGER.warning(
@@ -101,6 +106,17 @@ class GestureInferenceEngine:
         confidence = float(min(0.75, 0.35 + motion + energy))
         return score, confidence
 
+    def _coerce_feature_dim(self, frame: np.ndarray) -> np.ndarray:
+        if frame.ndim != 1:
+            frame = frame.reshape(-1)
+        if frame.shape[0] == self.config.input_size:
+            return frame.astype(np.float32)
+        if frame.shape[0] < self.config.input_size:
+            padded = np.zeros((self.config.input_size,), dtype=np.float32)
+            padded[: frame.shape[0]] = frame.astype(np.float32)
+            return padded
+        return frame[: self.config.input_size].astype(np.float32)
+
     def process_landmarks(self, landmarks: list[float] | np.ndarray) -> InferenceResult | None:
         """
         Consume one normalized frame and emit prediction every N frames.
@@ -110,7 +126,8 @@ class GestureInferenceEngine:
             otherwise None.
         """
         self.frame_counter += 1
-        self.buffer.add(landmarks)
+        frame = self._coerce_feature_dim(np.asarray(landmarks, dtype=np.float32))
+        self.buffer.add(frame)
 
         if not self.buffer.is_full:
             return None
@@ -141,9 +158,12 @@ class GestureInferenceEngine:
         if array.ndim != 2:
             raise ValueError("Expected sequence shape (T, F)")
         if array.shape[1] != self.config.input_size:
-            raise ValueError(
-                f"Expected feature dimension {self.config.input_size}, got {array.shape[1]}",
-            )
+            if array.shape[1] < self.config.input_size:
+                padded = np.zeros((array.shape[0], self.config.input_size), dtype=np.float32)
+                padded[:, : array.shape[1]] = array
+                array = padded
+            else:
+                array = array[:, : self.config.input_size]
 
         if self._torch_enabled and self._model is not None:
             idx, confidence = self._torch_predict(array)
