@@ -55,13 +55,62 @@ body {
   overflow: hidden;
 }
 
+.webcam-capture {
+  position: relative;
+  width: 100%;
+  min-height: 420px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
 .video-preview {
   width: 100%;
-  height: 100%;
+  height: auto;
+  min-height: 420px;
   max-height: 620px;
   object-fit: cover;
   border-radius: 10px;
   background: #0f172a;
+}
+
+.landmark-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.capture-indicators {
+  position: absolute;
+  top: 0.85rem;
+  left: 0.85rem;
+  display: flex;
+  gap: 0.45rem;
+  z-index: 3;
+}
+
+.capture-badge {
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(2, 6, 23, 0.74);
+  color: #e2e8f0;
+}
+
+.capture-error {
+  position: absolute;
+  left: 1rem;
+  right: 1rem;
+  top: 1rem;
+  z-index: 4;
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  background: rgba(127, 29, 29, 0.75);
+  color: #fecaca;
 }
 
 .subtitle-overlay {

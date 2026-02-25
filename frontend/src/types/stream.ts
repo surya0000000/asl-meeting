@@ -2,12 +2,17 @@ export type ConnectionState = "connecting" | "connected" | "disconnected" | "err
 
 export interface PredictionMessage {
   type: "prediction";
-  raw_prediction: string;
-  refined_text: string;
-  confidence: number;
+  gloss?: string;
+  raw_prediction?: string;
+  refined_text?: string;
+  refinedText?: string;
+  rawTranscript?: string;
+  raw_transcript?: string;
+  alternatives?: string[];
+  confidence?: number;
   audio_url?: string | null;
-  frame_index: number;
-  timestamp: string;
+  frame_index?: number;
+  timestamp?: string;
 }
 
 export interface ConnectionMessage {
@@ -23,6 +28,20 @@ export interface BufferingMessage {
 export interface ErrorMessage {
   type: "error";
   detail: unknown;
+}
+
+export interface LandmarkSequenceMessage {
+  type: "landmark_sequence";
+  sequence: number[][];
+  session_id: string;
+}
+
+export interface ASLPredictionState {
+  gloss: string;
+  confidence: number;
+  alternatives: string[];
+  rawTranscript: string;
+  refinedText: string;
 }
 
 export type StreamMessage =

@@ -1,91 +1,21 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { ConnectionIndicator } from "./components/ConnectionIndicator";
 import { SubtitleOverlay } from "./components/SubtitleOverlay";
-import { useWebSocket } from "./hooks/useWebSocket";
-import { StreamMessage } from "./types/stream";
+import { WebcamCapture } from "./components/WebcamCapture";
+import { useASLWebSocket } from "./hooks/useASLWebSocket";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8000/ws/asl-stream";
 
-function isPrediction(message: StreamMessage | null): message is Extract<StreamMessage, { type: "prediction" }> {
-  return message?.type === "prediction";
-}
-
 export default function App() {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [subtitle, setSubtitle] = useState("");
-  const [confidence, setConfidence] = useState<number | null>(null);
-  const [speechEnabled, setSpeechEnabled] = useState(true);
-  const [lastRawPrediction, setLastRawPrediction] = useState("n/a");
-  const [lastDetail, setLastDetail] = useState("Waiting for stream data...");
-
-  const { connectionState, latestMessage, sendJson } = useWebSocket({ url: WS_URL });
-
-  useEffect(() => {
-    let stream: MediaStream | null = null;
-    async function startWebcam() {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 1280, height: 720, frameRate: 30 },
-        audio: false
-      });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-    }
-    startWebcam().catch(() => {
-      setLastDetail("Webcam access failed. Please allow camera permission.");
-    });
-    return () => {
-      stream?.getTracks().forEach((track) => track.stop());
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!latestMessage) return;
-    if (latestMessage.type === "buffering") {
-      setLastDetail(latestMessage.detail);
-      return;
-    }
-    if (latestMessage.type === "error") {
-      setLastDetail("Backend stream error.");
-      return;
-    }
-    if (latestMessage.type === "connection") {
-      setLastDetail(`WebSocket ${latestMessage.status}`);
-      return;
-    }
-    if (!isPrediction(latestMessage)) return;
-
-    setSubtitle(latestMessage.refined_text || latestMessage.raw_prediction);
-    setConfidence(latestMessage.confidence);
-    setLastRawPrediction(latestMessage.raw_prediction);
-    setLastDetail(`Frame ${latestMessage.frame_index} @ ${latestMessage.timestamp}`);
-
-    if (speechEnabled && latestMessage.audio_url) {
-      const src = latestMessage.audio_url.startsWith("http")
-        ? latestMessage.audio_url
-        : `${API_BASE_URL}${latestMessage.audio_url}`;
-      const audio = new Audio(src);
-      void audio.play().catch(() => undefined);
-    }
-  }, [latestMessage, speechEnabled]);
+  const [latestLandmarks, setLatestLandmarks] = useState<Float32Array | null>(null);
+  const { connectionState, gloss, confidence, alternatives, rawTranscript, refinedText } = useASLWebSocket(
+    latestLandmarks,
+    WS_URL
+  );
 
   const websocketHelp = useMemo(() => {
-    return "Use ml/infer.py to send MediaPipe landmarks to this backend WebSocket.";
+    return "Landmarks are extracted directly in-browser and streamed to backend over WebSocket.";
   }, []);
-
-  const sendTestFrame = () => {
-    const landmarks = Array.from({ length: 63 }, () => Math.random() * 2 - 1);
-    const sent = sendJson({
-      type: "landmarks",
-      landmarks,
-      refine_text: true,
-      speak: speechEnabled
-    });
-    if (!sent) {
-      setLastDetail("WebSocket is not open yet.");
-    }
-  };
 
   return (
     <main className="app-shell">
@@ -96,31 +26,25 @@ export default function App() {
 
       <section className="layout-grid">
         <div className="video-card">
-          <video ref={videoRef} autoPlay muted playsInline className="video-preview" />
-          <SubtitleOverlay text={subtitle} confidence={confidence} />
+          <WebcamCapture onLandmarks={setLatestLandmarks} />
+          <SubtitleOverlay text={refinedText || gloss} confidence={confidence ?? null} />
         </div>
 
         <aside className="control-card">
-          <h2>Session Controls</h2>
-          <label className="toggle-row">
-            <input
-              type="checkbox"
-              checked={speechEnabled}
-              onChange={(event) => setSpeechEnabled(event.target.checked)}
-            />
-            <span>Enable speech playback</span>
-          </label>
-
-          <button className="btn" onClick={sendTestFrame}>
-            Send test frame to backend
-          </button>
+          <h2>Live Recognition</h2>
 
           <div className="meta-block">
             <p>
-              <strong>Last raw prediction:</strong> {lastRawPrediction}
+              <strong>Latest gloss:</strong> {gloss || "UNSURE"}
             </p>
             <p>
-              <strong>Status:</strong> {lastDetail}
+              <strong>Confidence:</strong> {(confidence * 100).toFixed(1)}%
+            </p>
+            <p>
+              <strong>Raw transcript:</strong> {rawTranscript || "n/a"}
+            </p>
+            <p>
+              <strong>Alternatives:</strong> {alternatives.length ? alternatives.join(", ") : "n/a"}
             </p>
             <p className="helper-text">{websocketHelp}</p>
           </div>
