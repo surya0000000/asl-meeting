@@ -61,9 +61,9 @@ hands.onResults((results: Results) => {
 
   for (let i = 0; i < handLandmarks.length; i += 1) {
     const landmarks = handLandmarks[i];
-    const classification = handedness[i]?.classification?.[0];
-    const label = (classification?.label || "").toLowerCase();
-    const score = Number(classification?.score ?? 0.0);
+    const handednessItem = handedness[i] as unknown as { label?: string; score?: number } | undefined;
+    const label = (handednessItem?.label || "").toLowerCase();
+    const score = Number(handednessItem?.score ?? 0.0);
     const flat = flattenLandmarks(landmarks);
 
     if (label === "left") {
@@ -125,7 +125,7 @@ async function processFrame(message: WorkerFrameInput): Promise<void> {
     offscreenCanvas.width = frame.width;
     offscreenCanvas.height = frame.height;
     offscreenCtx.drawImage(frame, 0, 0, frame.width, frame.height);
-    await hands.send({ image: offscreenCanvas });
+    await hands.send({ image: offscreenCanvas as unknown as HTMLCanvasElement });
   } catch (error) {
     self.postMessage({
       type: "error",
