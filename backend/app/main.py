@@ -12,7 +12,11 @@ from fastapi.staticfiles import StaticFiles
 from backend.app.api import rest_router, websocket_router
 from backend.app.core.config import get_settings
 from backend.app.core.logging import configure_logging
+from backend.app.core.session_manager import SessionManager
+from backend.app.services.onnx_inference_engine import ONNXInferenceEngine
+from backend.app.services.speech_engine import SpeechEngine
 from backend.app.services.stream_processor import StreamProcessor
+from backend.app.services.text_refiner import TextRefiner
 
 
 LOGGER = logging.getLogger(__name__)
@@ -25,8 +29,24 @@ async def lifespan(app: FastAPI):
     settings.audio_output_path.mkdir(parents=True, exist_ok=True)
     app.state.settings = settings
     app.state.stream_processor = StreamProcessor(settings)
+    app.state.onnx_inference_engine = ONNXInferenceEngine(
+        model_path=settings.onnx_model_path,
+        label_map_path=settings.label_map_path,
+    )
+    app.state.text_refiner = TextRefiner(
+        enabled=settings.enable_text_refiner,
+        openai_api_key=settings.openai_api_key,
+        openai_model=settings.openai_model,
+    )
+    app.state.speech_engine = SpeechEngine(
+        output_dir=settings.audio_output_path,
+        enabled=settings.enable_tts,
+    )
+    app.state.session_manager = SessionManager()
+    app.state.session_manager.start_cleanup_task()
     LOGGER.info("ASL Meeting Copilot backend initialized.")
     yield
+    await app.state.session_manager.stop_cleanup_task()
     LOGGER.info("ASL Meeting Copilot backend shutting down.")
 
 

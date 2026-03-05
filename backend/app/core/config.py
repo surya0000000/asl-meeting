@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     model_checkpoint_path: str = "ml/models/gesture_model.pt"
+    onnx_model_path_value: str = "ml/models/gesture_model.onnx"
+    label_map_path_value: str = "ml/models/label_map.json"
     gesture_vocab: str = "HELLO,YES,NO,WAIT,QUESTION,AGREE,DISAGREE,SLOW DOWN,THANK YOU"
     sequence_length: int = 30
     predict_every_n_frames: int = 5
@@ -45,6 +47,14 @@ class Settings(BaseSettings):
     @property
     def checkpoint_path(self) -> Path:
         return Path(self.model_checkpoint_path)
+
+    @property
+    def onnx_model_path(self) -> Path:
+        return Path(self.onnx_model_path_value)
+
+    @property
+    def label_map_path(self) -> Path:
+        return Path(self.label_map_path_value)
 
     @property
     def cors_origins(self) -> list[str]:
