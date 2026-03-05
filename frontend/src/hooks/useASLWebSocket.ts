@@ -12,6 +12,15 @@ const LANDMARK_DIM = 126;
 const SEND_INTERVAL_MS = 100;
 const MAX_BACKOFF_MS = 30_000;
 
+export interface ASLPredictionEvent extends ASLPredictionState {
+  timestamp: number;
+}
+
+interface UseASLWebSocketOptions {
+  onPrediction?: (prediction: ASLPredictionEvent) => void;
+  enabled?: boolean;
+}
+
 function randomSessionId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
@@ -19,23 +28,27 @@ function randomSessionId(): string {
   return `session-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
 }
 
-function parsePrediction(message: PredictionMessage): ASLPredictionState {
+function parsePrediction(message: PredictionMessage): ASLPredictionEvent {
   const gloss = message.gloss || message.raw_prediction || "UNSURE";
   const refined = message.refinedText || message.refined_text || gloss;
   const rawTranscript = message.rawTranscript || message.raw_transcript || gloss;
+  const parsedTimestamp = message.timestamp ? Date.parse(message.timestamp) : NaN;
   return {
     gloss,
     confidence: Number(message.confidence ?? 0),
     alternatives: Array.isArray(message.alternatives) ? message.alternatives : [],
     rawTranscript,
-    refinedText: refined
+    refinedText: refined,
+    timestamp: Number.isFinite(parsedTimestamp) ? parsedTimestamp : Date.now()
   };
 }
 
 export function useASLWebSocket(
   landmarks: Float32Array | null,
-  url: string = "ws://localhost:8000/ws/asl-stream"
+  url: string = "ws://localhost:8000/ws/asl-stream",
+  options: UseASLWebSocketOptions = {}
 ) {
+  const { onPrediction, enabled = true } = options;
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
   const sequenceBufferRef = useRef<Float32Array[]>(
@@ -129,6 +142,10 @@ export function useASLWebSocket(
   }, [landmarks, pushLandmarks, sendSequence]);
 
   useEffect(() => {
+    if (!enabled) {
+      setConnectionState("disconnected");
+      return () => undefined;
+    }
     manualCloseRef.current = false;
     let heartbeatTimer: number | null = null;
 
@@ -162,7 +179,9 @@ export function useASLWebSocket(
         try {
           const payload = JSON.parse(event.data) as StreamMessage;
           if (payload.type === "prediction") {
-            setPrediction(parsePrediction(payload));
+            const next = parsePrediction(payload);
+            setPrediction(next);
+            onPrediction?.(next);
           }
         } catch {
           setConnectionState("error");
@@ -198,7 +217,7 @@ export function useASLWebSocket(
       socketRef.current?.close();
       socketRef.current = null;
     };
-  }, [sendSequence, url]);
+  }, [enabled, onPrediction, sendSequence, url]);
 
   return useMemo(
     () => ({

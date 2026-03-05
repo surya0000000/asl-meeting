@@ -1,4 +1,4 @@
-import { RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 interface LandmarkWorkerResponse {
   type: "landmarks";
@@ -29,10 +29,11 @@ export interface HandLandmarkState {
   rightConfidence: number;
 }
 
-const TARGET_FPS = 15;
-const MIN_FRAME_INTERVAL_MS = 1000 / TARGET_FPS;
+export interface HandLandmarkController extends HandLandmarkState {
+  processFrame: (frame: ImageBitmap) => void;
+}
 
-export function useHandLandmarks(videoRef: RefObject<HTMLVideoElement>): HandLandmarkState {
+export function useHandLandmarks(): HandLandmarkController {
   const [landmarks, setLandmarks] = useState<Float32Array | null>(null);
   const [left, setLeft] = useState<Float32Array | null>(null);
   const [right, setRight] = useState<Float32Array | null>(null);
@@ -42,14 +43,24 @@ export function useHandLandmarks(videoRef: RefObject<HTMLVideoElement>): HandLan
   const [fps, setFps] = useState(0);
 
   const workerRef = useRef<Worker | null>(null);
-  const rafRef = useRef<number | null>(null);
-  const inFlightRef = useRef(false);
-  const lastFrameSentMs = useRef(0);
   const frameTimestampsRef = useRef<number[]>([]);
-  const stoppedRef = useRef(false);
+  const processFrame = useCallback((frame: ImageBitmap) => {
+    const worker = workerRef.current;
+    if (!worker) {
+      frame.close();
+      return;
+    }
+    worker.postMessage(
+      {
+        type: "frame",
+        timestamp: performance.now(),
+        frame
+      },
+      [frame]
+    );
+  }, []);
 
   useEffect(() => {
-    stoppedRef.current = false;
     const worker = new Worker(new URL("../workers/landmarkWorker.ts", import.meta.url), {
       type: "module"
     });
@@ -57,11 +68,7 @@ export function useHandLandmarks(videoRef: RefObject<HTMLVideoElement>): HandLan
 
     worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
       const payload = event.data;
-      inFlightRef.current = false;
-      if (!payload) {
-        return;
-      }
-      if (payload.type === "error") {
+      if (!payload || payload.type === "error") {
         return;
       }
 
@@ -83,52 +90,15 @@ export function useHandLandmarks(videoRef: RefObject<HTMLVideoElement>): HandLan
       }
     };
 
-    const captureLoop = async (now: number) => {
-      if (stoppedRef.current) {
-        return;
-      }
-      const video = videoRef.current;
-      if (
-        video &&
-        video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
-        !video.paused &&
-        !video.ended &&
-        !inFlightRef.current &&
-        now - lastFrameSentMs.current >= MIN_FRAME_INTERVAL_MS
-      ) {
-        try {
-          lastFrameSentMs.current = now;
-          inFlightRef.current = true;
-          const frame = await createImageBitmap(video);
-          worker.postMessage(
-            {
-              type: "frame",
-              timestamp: performance.now(),
-              frame
-            },
-            [frame]
-          );
-        } catch {
-          inFlightRef.current = false;
-        }
-      }
-      rafRef.current = requestAnimationFrame(captureLoop);
-    };
-
-    rafRef.current = requestAnimationFrame(captureLoop);
-
     return () => {
-      stoppedRef.current = true;
-      if (rafRef.current !== null) {
-        cancelAnimationFrame(rafRef.current);
-      }
       workerRef.current?.terminate();
       workerRef.current = null;
     };
-  }, [videoRef]);
+  }, []);
 
   return useMemo(
     () => ({
+      processFrame,
       landmarks,
       fps,
       handsDetected,
@@ -137,7 +107,7 @@ export function useHandLandmarks(videoRef: RefObject<HTMLVideoElement>): HandLan
       leftConfidence,
       rightConfidence
     }),
-    [fps, handsDetected, landmarks, left, leftConfidence, right, rightConfidence]
+    [fps, handsDetected, landmarks, left, leftConfidence, processFrame, right, rightConfidence]
   );
 }
 

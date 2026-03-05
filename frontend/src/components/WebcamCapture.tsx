@@ -1,50 +1,30 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo } from "react";
+import { useFrameExtractor } from "../hooks/useFrameExtractor";
 import { useHandLandmarks } from "../hooks/useHandLandmarks";
 import { LandmarkOverlay } from "./LandmarkOverlay";
 
 interface Props {
+  stream: MediaStream | null;
   onLandmarks?: (landmarks: Float32Array | null) => void;
+  className?: string;
+  label?: string;
+  externalError?: string | null;
 }
 
-export function WebcamCapture({ onLandmarks }: Props) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [cameraError, setCameraError] = useState<string | null>(null);
-
-  const { landmarks, fps, handsDetected, left, right, leftConfidence, rightConfidence } =
-    useHandLandmarks(videoRef);
-
-  useEffect(() => {
-    let stream: MediaStream | null = null;
-    const setupWebcam = async () => {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            frameRate: { ideal: 30 }
-          },
-          audio: false
-        });
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-      } catch {
-        setCameraError("Unable to access webcam. Please allow camera permissions.");
-      }
-    };
-
-    void setupWebcam();
-    return () => {
-      stream?.getTracks().forEach((track) => track.stop());
-    };
-  }, []);
+export function WebcamCapture({ stream, onLandmarks, className, label, externalError }: Props) {
+  const { processFrame, landmarks, fps: landmarkFps, handsDetected, left, right, leftConfidence, rightConfidence } =
+    useHandLandmarks();
+  const { videoRef, fps: captureFps, error: extractorError } = useFrameExtractor(stream, processFrame, 15);
 
   useEffect(() => {
     onLandmarks?.(landmarks);
   }, [landmarks, onLandmarks]);
 
+  const mergedError = externalError || extractorError || (!stream ? "No media stream selected." : null);
+  const displayFps = useMemo(() => Math.min(captureFps || 0, landmarkFps || 0), [captureFps, landmarkFps]);
+
   return (
-    <div className="webcam-capture">
+    <div className={`webcam-capture ${className ?? ""}`.trim()}>
       <video ref={videoRef} autoPlay muted playsInline className="video-preview" />
       <LandmarkOverlay
         videoRef={videoRef}
@@ -55,11 +35,12 @@ export function WebcamCapture({ onLandmarks }: Props) {
       />
 
       <div className="capture-indicators">
-        <span className="capture-badge">FPS: {fps.toFixed(0)}</span>
+        {label ? <span className="capture-badge">{label}</span> : null}
+        <span className="capture-badge">FPS: {displayFps.toFixed(0)}</span>
         <span className="capture-badge">Hands detected: {handsDetected}</span>
       </div>
 
-      {cameraError ? <div className="capture-error">{cameraError}</div> : null}
+      {mergedError ? <div className="capture-error">{mergedError}</div> : null}
     </div>
   );
 }
