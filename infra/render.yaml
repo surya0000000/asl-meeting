@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: asl-meeting-copilot-backend
+    env: docker
+    dockerfilePath: ./backend/Dockerfile
+    plan: starter
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: HOST
+        value: "0.0.0.0"
+      - key: LOG_LEVEL
+        value: "INFO"
+      - key: ENABLE_TEXT_REFINER
+        value: "true"
+      - key: ENABLE_TTS
+        value: "false"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: MODEL_CHECKPOINT_PATH
+        value: "ml/models/gesture_model.pt"
+      - key: GESTURE_VOCAB
+        value: "HELLO,YES,NO,WAIT,QUESTION,AGREE,DISAGREE,SLOW DOWN,THANK YOU"
+
+  - type: static
+    name: asl-meeting-copilot-frontend
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    pullRequestPreviewsEnabled: true
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://asl-meeting-copilot-backend.onrender.com
+      - key: VITE_WS_URL
+        value: wss://asl-meeting-copilot-backend.onrender.com/ws/asl-stream
+

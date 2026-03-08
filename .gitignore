@@ -1,0 +1,40 @@
+.DS_Store
+.env
+.env.*
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Python virtualenvs
+.venv/
+venv/
+env/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Logs and temp
+*.log
+tmp/
+temp/
+
+# ML artifacts
+ml/models/*.pt
+ml/models/*.pth
+ml/models/*.onnx
+ml/checkpoints/
+backend/audio_output/
+*.wav
+*.pt
+*.pth
+
+# IDE
+.idea/
+.vscode/

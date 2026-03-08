@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+pydantic-settings
+numpy
+torch
+openai>=1.0.0
+pyttsx3
+websockets
+httpx
+pytest
+onnxruntime>=1.17.0
+edge-tts>=6.1.9

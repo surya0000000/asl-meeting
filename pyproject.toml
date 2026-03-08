@@ -1,0 +1,10 @@
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-q"
+testpaths = [
+  "backend/tests",
+  "ml/tests",
+]
+pythonpath = [
+  ".",
+]
